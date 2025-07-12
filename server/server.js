@@ -282,7 +282,53 @@ function getUsersInRoom(room) {
 
 // API routes
 app.get('/api/messages', (req, res) => {
-  res.json(messages);
+  let { limit, before, room, isPrivate, recipientId } = req.query;
+  limit = parseInt(limit) || 20;
+  let filtered = messages;
+
+  // Filter by room
+  if (room) {
+    filtered = filtered.filter(m => m.room === room && !m.isPrivate);
+  }
+
+  // Filter by private messages
+  if (isPrivate === 'true') {
+    if (recipientId) {
+      filtered = filtered.filter(m => m.isPrivate && (m.senderId === recipientId || m.recipientId === recipientId));
+    } else {
+      filtered = filtered.filter(m => m.isPrivate);
+    }
+  }
+
+  // Filter by 'before' timestamp (for pagination)
+  if (before) {
+    filtered = filtered.filter(m => new Date(m.timestamp) < new Date(before));
+  }
+
+  // Sort by timestamp descending (newest first)
+  filtered = filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // Take up to 'limit' messages
+  filtered = filtered.slice(0, limit);
+
+  // Return in chronological order (oldest first)
+  filtered = filtered.reverse();
+
+  res.json(filtered);
+});
+
+// REST API to fetch paginated messages for a room
+app.get('/api/messages', (req, res) => {
+  const { room = 'General', limit = 20, before } = req.query;
+  let filtered = messages.filter(m => m.room === room);
+  if (before) {
+    filtered = filtered.filter(m => new Date(m.timestamp) < new Date(before));
+  }
+  // Sort newest to oldest
+  filtered = filtered.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  // Paginate
+  const paginated = filtered.slice(0, Number(limit));
+  res.json(paginated);
 });
 
 app.get('/api/users', (req, res) => {

@@ -14,8 +14,10 @@
     "axios": "^1.10.0",
     "builds": "^0.0.2",
     "emoji-picker-react": "^4.12.3",
+    "notifier": "^0.2.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "real-time": "^1.0.14",
     "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.11"
   },
