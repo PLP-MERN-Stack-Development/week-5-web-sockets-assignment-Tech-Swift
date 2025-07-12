@@ -26,6 +26,10 @@ function App() {
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('Connected');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimeout = useRef(null);
 
   const {
     isConnected,
@@ -396,6 +400,47 @@ function App() {
     };
   }, [socket]);
 
+  // Search handler
+  useEffect(() => {
+    if (!searchTerm) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(async () => {
+      let url = 'http://localhost:5000/api/messages?limit=10&search=' + encodeURIComponent(searchTerm);
+      if (privateRecipient) {
+        url += `&isPrivate=true&recipientId=${privateRecipient.id}`;
+      } else if (currentRoom) {
+        url += `&room=${encodeURIComponent(currentRoom)}`;
+      }
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        setSearchResults(data);
+        setShowDropdown(true);
+      } catch (err) {
+        setSearchResults([]);
+        setShowDropdown(false);
+      }
+    }, 300);
+    return () => clearTimeout(searchTimeout.current);
+  }, [searchTerm, currentRoom, privateRecipient]);
+
+  // Scroll to message in chat
+  const handleResultClick = (msgId) => {
+    setShowDropdown(false);
+    setSearchTerm('');
+    // Try to scroll to the message in the chat
+    const el = document.getElementById('msg-' + msgId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-yellow-100');
+      setTimeout(() => el.classList.remove('bg-yellow-100'), 2000);
+    }
+  };
+
   if (!username) {
   return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-300">
@@ -500,11 +545,38 @@ function App() {
               <span className="font-bold text-xl text-teal-100">{currentRoom} Room</span>
               <span className="text-gray-300 text-sm">Logged in as <span className="font-semibold text-teal-300">{username}</span></span>
             </div>
+            {/* Search bar and dropdown */}
+            <div className="relative px-6 pt-2 pb-1 bg-gray-50 border-b border-gray-200">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder={privateRecipient ? `Search private messages...` : `Search in ${currentRoom}...`}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white text-gray-800"
+                onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+              />
+              {showDropdown && searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 max-h-60 overflow-y-auto">
+                  {searchResults.map(msg => (
+                    <div
+                      key={msg.id}
+                      className="px-4 py-2 hover:bg-teal-100 cursor-pointer text-sm text-gray-800"
+                      onClick={() => handleResultClick(msg.id)}
+                    >
+                      <span className="font-semibold text-teal-700">{msg.sender}:</span> {typeof msg.message === 'string' ? msg.message : (msg.message && msg.message.message) || '[File]'}
+                      <span className="block text-xs text-gray-400">{new Date(msg.timestamp).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  {searchResults.length === 0 && <div className="px-4 py-2 text-gray-500">No results</div>}
+                </div>
+              )}
+            </div>
             {/* Message list rendering */}
             <div className="messages flex-1 overflow-y-auto px-6 py-4 space-y-2 bg-gray-50" ref={messagesContainerRef}>
               {privateRecipient
                 ? privateMessages.map((msg, idx) => (
-                    <div key={msg.id} className={msg.sender === username ? 'flex justify-end' : 'flex justify-start'}>
+                    <div key={msg.id} id={`msg-${msg.id}`} className={msg.sender === username ? 'flex justify-end' : 'flex justify-start'}>
                       <div
                         className={
                           msg.sender === username
@@ -576,7 +648,7 @@ function App() {
                     </div>
                   ))
                 : filteredMessages.map((msg, idx) => (
-                    <div key={msg.id + '-' + msg.timestamp + '-' + idx} className={msg.sender === username ? 'flex justify-end' : 'flex justify-start'}>
+                    <div key={msg.id + '-' + msg.timestamp + '-' + idx} id={`msg-${msg.id}`} className={msg.sender === username ? 'flex justify-end' : 'flex justify-start'}>
                       <div
                         className={
                           msg.system

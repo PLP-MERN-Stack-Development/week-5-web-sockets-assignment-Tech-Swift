@@ -282,7 +282,7 @@ function getUsersInRoom(room) {
 
 // API routes
 app.get('/api/messages', (req, res) => {
-  let { limit, before, room, isPrivate, recipientId } = req.query;
+  let { limit, before, room, isPrivate, recipientId, search } = req.query;
   limit = parseInt(limit) || 20;
   let filtered = messages;
 
@@ -298,6 +298,12 @@ app.get('/api/messages', (req, res) => {
     } else {
       filtered = filtered.filter(m => m.isPrivate);
     }
+  }
+
+  // Filter by search keyword (case-insensitive)
+  if (search && typeof search === 'string') {
+    const keyword = search.toLowerCase();
+    filtered = filtered.filter(m => m.message && m.message.toLowerCase().includes(keyword));
   }
 
   // Filter by 'before' timestamp (for pagination)
