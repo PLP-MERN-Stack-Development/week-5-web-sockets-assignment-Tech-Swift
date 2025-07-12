@@ -15,7 +15,7 @@ export const socket = io(SOCKET_URL, {
 });
 
 // Custom hook for using socket.io
-export const useSocket = () => {
+export const useSocket = (setRooms) => {
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [lastMessage, setLastMessage] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -112,6 +112,26 @@ export const useSocket = () => {
       setTypingUsers(users);
     };
 
+    // Read receipt event
+    const onMessageReadUpdate = ({ messageId, readBy, room }) => {
+      setMessages((prev) => prev.map((msg) =>
+        msg.id === messageId && msg.room === room ? { ...msg, readBy } : msg
+      ));
+    };
+
+    // Room list event
+    const onRoomList = (roomList) => {
+      if (setRooms) setRooms(roomList);
+    };
+
+    // Reaction update event
+    const onReactionUpdate = ({ messageId, reactions }) => {
+      console.log('[reaction_update] Received for message:', messageId, reactions);
+      setMessages((prev) => prev.map(msg =>
+        msg.id === messageId ? { ...msg, reactions } : msg
+      ));
+    };
+
     // Register event listeners
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -121,6 +141,9 @@ export const useSocket = () => {
     socket.on('user_joined', onUserJoined);
     socket.on('user_left', onUserLeft);
     socket.on('typing_users', onTypingUsers);
+    socket.on('message_read_update', onMessageReadUpdate);
+    socket.on('room_list', onRoomList);
+    socket.on('reaction_update', onReactionUpdate);
 
     // Clean up event listeners
     return () => {
@@ -132,8 +155,16 @@ export const useSocket = () => {
       socket.off('user_joined', onUserJoined);
       socket.off('user_left', onUserLeft);
       socket.off('typing_users', onTypingUsers);
+      socket.off('message_read_update', onMessageReadUpdate);
+      socket.off('room_list', onRoomList);
+      socket.off('reaction_update', onReactionUpdate);
     };
-  }, []);
+  }, [setRooms]);
+
+  // Create a room via socket
+  const createRoom = (name) => {
+    socket.emit('create_room', { name });
+  };
 
   return {
     socket,
@@ -147,6 +178,7 @@ export const useSocket = () => {
     sendMessage,
     sendPrivateMessage,
     setTyping,
+    createRoom,
   };
 };
 

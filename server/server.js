@@ -66,9 +66,46 @@ const messages = [];
 const typingUsers = {};
 
 // Static list of available rooms
-const availableRooms = ['General', 'Tech', 'Random'];
+const roomsFile = path.join(__dirname, 'rooms.json');
+let availableRooms = ['General', 'Tech', 'Random'];
+// Load rooms from file if it exists
+try {
+  if (fs.existsSync(roomsFile)) {
+    const fileData = fs.readFileSync(roomsFile, 'utf-8');
+    const loadedRooms = JSON.parse(fileData);
+    if (Array.isArray(loadedRooms) && loadedRooms.length > 0) {
+      availableRooms = loadedRooms;
+    }
+  }
+} catch (err) {
+  console.error('Error loading rooms from file:', err);
+}
+
+function saveRoomsToFile() {
+  try {
+    fs.writeFileSync(roomsFile, JSON.stringify(availableRooms, null, 2));
+  } catch (err) {
+    console.error('Error saving rooms to file:', err);
+  }
+}
 // Track which users are in which rooms
 const userRooms = {};
+
+// REST API to create a new room
+app.post('/api/rooms', (req, res) => {
+  const { name } = req.body;
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'Room name is required' });
+  }
+  const roomName = name.trim();
+  if (availableRooms.includes(roomName)) {
+    return res.status(409).json({ error: 'Room already exists' });
+  }
+  availableRooms.push(roomName);
+  saveRoomsToFile();
+  io.emit('room_list', availableRooms);
+  res.status(201).json({ name: roomName });
+});
 
 // Socket.io connection handler
 io.on('connection', (socket) => {
@@ -118,11 +155,23 @@ io.on('connection', (socket) => {
       senderId: socket.id,
       timestamp: new Date().toISOString(),
       room,
+      readBy: [], // Track who has read this message
     };
     messages.push(message);
     if (messages.length > 100) messages.shift();
     io.to(room).emit('receive_message', message);
     // Removed socket.emit('receive_message', message) to avoid duplicate messages
+  });
+
+  // Handle message read receipts for general room
+  socket.on('message_read', ({ messageId, username, room }) => {
+    // Find the message in the messages array
+    const msg = messages.find((m) => m.id === messageId && m.room === room);
+    if (msg && !msg.readBy.includes(username)) {
+      msg.readBy.push(username);
+      // Notify all users in the room about the read receipt update
+      io.to(room).emit('message_read_update', { messageId, readBy: msg.readBy, room });
+    }
   });
 
   // Handle typing indicator
@@ -142,10 +191,14 @@ io.on('connection', (socket) => {
 
   // Handle private messages
   socket.on('private_message', ({ to, message }) => {
+    if (!users[socket.id]) {
+      console.warn(`[private_message] No user found for socket ID ${socket.id}. Message will be sent as Anonymous.`);
+    }
     const messageData = {
       id: Date.now(),
       sender: users[socket.id]?.username || 'Anonymous',
       senderId: socket.id,
+      recipientId: to,
       message,
       timestamp: new Date().toISOString(),
       isPrivate: true,
@@ -155,6 +208,44 @@ io.on('connection', (socket) => {
     socket.join(privateRoom);
     io.sockets.sockets.get(to)?.join(privateRoom);
     io.to(privateRoom).emit('private_message', messageData);
+  });
+
+  // Handle add_reaction for message reactions
+  socket.on('add_reaction', ({ messageId, emoji, username }) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    if (!msg.reactions) msg.reactions = [];
+    let reaction = msg.reactions.find(r => r.emoji === emoji);
+    if (!reaction) {
+      reaction = { emoji, users: [] };
+      msg.reactions.push(reaction);
+    }
+    if (!reaction.users.includes(username)) {
+      reaction.users.push(username);
+    } else {
+      // Toggle off: remove user
+      reaction.users = reaction.users.filter(u => u !== username);
+      if (reaction.users.length === 0) {
+        msg.reactions = msg.reactions.filter(r => r.emoji !== emoji);
+      }
+    }
+    // Emit to the correct room or private chat
+    if (msg.isPrivate) {
+      io.to(msg.senderId).emit('reaction_update', { messageId, reactions: msg.reactions });
+      if (msg.recipientId) io.to(msg.recipientId).emit('reaction_update', { messageId, reactions: msg.reactions });
+    } else {
+      io.to(msg.room).emit('reaction_update', { messageId, reactions: msg.reactions });
+    }
+  });
+
+  // Handle dynamic room creation via socket
+  socket.on('create_room', ({ name }) => {
+    if (!name || typeof name !== 'string' || !name.trim()) return;
+    const roomName = name.trim();
+    if (availableRooms.includes(roomName)) return;
+    availableRooms.push(roomName);
+    saveRoomsToFile();
+    io.emit('room_list', availableRooms);
   });
 
   // Handle disconnection
