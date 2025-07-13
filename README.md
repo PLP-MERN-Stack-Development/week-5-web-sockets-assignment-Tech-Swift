@@ -30,21 +30,21 @@ A modern real-time chat platform built with **React**, **Express**, **Socket.io*
 - [x] Read receipts
 - [x] Message reactions
 
-### 🟡 Task 4: Real-Time Notifications
+### 🟢 Task 4: Real-Time Notifications
 
-- [ ] In-app and browser notifications for new messages
-- [ ] User join/leave alerts
-- [ ] Unread message count
-- [ ] Sound notifications
+- [x] In-app and browser notifications for new messages
+- [x] User join/leave alerts
+- [x] Unread message count
+- [x] Sound notifications
 
-### 🟡 Task 5: Performance & UX
+### 🟢 Task 5: Performance & UX
 
-- [ ] Message pagination
+- [x] Message pagination
 - [x] Reconnection logic
 - [x] Efficient use of Socket.io rooms
-- [ ] Message delivery acknowledgment
-- [ ] Message search
-- [ ] Responsive/mobile-friendly design
+- [x] Message delivery acknowledgment
+- [x] Message search
+- [x] Responsive/mobile-friendly design
 
 ---
 
