@@ -1,5 +1,6 @@
 // server.js - Main server file for Socket.io chat application
-
+require('dotenv').config();
+const connectDB = require('./config/db')
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -8,6 +9,7 @@ const dotenv = require('dotenv');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const { connect } = require('http2');
 
 // Load environment variables
 dotenv.config();
@@ -178,13 +180,13 @@ io.on('connection', (socket) => {
   socket.on('typing', (isTyping) => {
     if (users[socket.id]) {
       const username = users[socket.id].username;
-      
+
       if (isTyping) {
         typingUsers[socket.id] = username;
       } else {
         delete typingUsers[socket.id];
       }
-      
+
       io.emit('typing_users', Object.values(typingUsers));
     }
   });
@@ -255,10 +257,10 @@ io.on('connection', (socket) => {
       io.emit('user_left', { username, id: socket.id });
       console.log(`${username} left the chat`);
     }
-    
+
     delete users[socket.id];
     delete typingUsers[socket.id];
-    
+
     io.emit('user_list', Object.values(users));
     io.emit('typing_users', Object.values(typingUsers));
 
@@ -357,4 +359,4 @@ server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-module.exports = { app, server, io }; 
+module.exports = { app, server, io };
